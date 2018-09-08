@@ -1,0 +1,468 @@
+---
+title: 'Fireballs & Bolides - the bright Meteors'
+author: 'Anshuman Moudgil'
+date: '27 November 2017'
+output:
+  html_document:
+    number_sections: true
+    toc: true
+    fig_width: 7
+    fig_height: 4.5
+    theme: readable
+    highlight: tango
+    code_folding: hide
+---
+---------------------------------------------------------------
+Kaggle URL: https://www.kaggle.com/anshumoudgil/fireballs-the-shooting-stars/notebook
+---------------------------------------------------------------
+Dear Reader,
+
+  This notebook is about Fireballs and Bolides, or as we all call them shooting stars. The data has been provided by **NASA** **Jet Propulsion Laboratory** the [CNEOS](https://cneos.jpl.nasa.gov/fireballs/intro.html) 
+
+  The team of **Gareth S COLLINS** had sipmlified and beautifully explained about meteoroids in their Web—Based program [Earth Impact](https://www.purdue.edu/impactearth/) . Please do consider doing some simulations there as well.
+
+# Introduction
+
+  Fireballs and Bolides are the phenomenon that happens when a Meteoroid enters Earth’s atmosphere. In physics terms, the phenomenon of shooting stars has two aspects. First, a Meteoroid with mass as one of its principal parameters — just before it enters Earth’s atmosphere. Second, a Bolide with energy as its parameter — after it dives into Earth’s atmosphere.
+
+  A Meteoroid, with a given mass, enters the atmosphere at a certain angle of incidence with a certain pre—entry velocity. This entry into atmoshpere initiates the physics principle of mass—energy conservation for the Meteoroid. The Total Energy of Meteoroid, as a ƒ(mass, velocity, density, composition, shape), starts dissipating in Earth’s atmosphere and later - at very high temperature attained due to friction - the explosion of Bolide takes place. This Total Energy of Meteoroid is calculated and privided in the data as Calculated Total Impact Energy. The remaining energy of Meteoroid, at the time of air burst, becomes the Total Energy of Bolide. In this note book I’ll be concentrating only on thermodynamic part of energy equation.
+
+  I hope this brief explanation has helped you understand the rationale. Let’s read further and see how feature engineering and data analyses pans out. I have created some new features both for Meteoroids and Bolides. Data provided by NASA covers **Bolide's parameters** with respect to **Earth as a reference point**
+
+## NASA’s Definition
+
+  NASA’s Center of NEO Studies defined: A meteoroid is generally defined as an asteroid or comet that orbits the Sun. Meteors, or “shooting stars”, are the visible paths of meteoroids that have entered the Earth’s atmosphere at high velocities. A Fireball is an unusually bright meteor that reaches a visual magnitude of -3 or brighter when seen at the observer’s zenith. Fireballs that explode in the atmosphere are technically referred to as Bolides although the terms Fireballs and Bolides are often used interchangeably [2].
+
+  As stated by NASA: “Altitude (km) given in the data is the orthogonal distance of Meteoroid’s explosion above the sea level. The curvature of earth is taken into consideration while calculating the Altitude”. The parameters are measured with respect to Earth as a reference point. Example, if a Bolide explodes at an altitude of 30 km — measured by an observer from Earth’s surface — then in theory Meteoroid has already displaced 70 km of the atmosphere’s thickness from atmosphere's edge.
+
+  **Please Note** : Theoretically the edge of [Earth Atmosphere](https://en.wikipedia.org/wiki/Atmosphere_of_Earth) is at 100 km, or 1.57% of Earth’s radius, i.e. the assumed border between the atmosphere and the outer space, its called as **Karman Line** (source: wikipedia).
+
+## Libraries used in this notebook
+
+```{r, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(lattice)
+library(caret)
+library(boot)
+```
+
+## Load Fireballs and Bolides data and create a copy
+
+```{r, message=FALSE, warning=FALSE}
+Fireballs <- read.csv("../input/cneos_fireball_data.csv", header = TRUE)
+Bolide.img <- Fireballs
+```
+
+## First glimpse of the data
+
+```{r}
+summary(Bolide.img)
+```
+
+## Brief description of Bolide's data 
+
+Table 01. Data Description
+
+```{r}
+Data.Description <- matrix(c("Date and Time (Universal Time) of Bolide's peak brightness", "Earth's Latitudes, North or South of 0° equator", "Earth's Longitudes, East or West of 0° Prime Meridian", "Altitude (km) above geoid, at peak brightness i.e. Air-burst", "Velocity (km/s) at peak brightness i.e. Air-burst", "vx, Velocity component (km/s), x-axis in Earth's equatorial plane", "vy, Velocity component (km/s), y-axis right handed coordinate", "vz, Velocity component (km/s), z-axis along Earth's rotation axis towards celestial north pole", "Total Radiated Energy (Joules) by Bolide", "Calculated Total Impact Energy (kt) of event in kilotons of TNT"), ncol = 1, byrow = TRUE)
+colnames(Data.Description) <- c("Variables' Description (by NASA by Center for NEO Studies)")
+rownames(Data.Description) <- c("01", "02", "03", "04", "05", "06", "07", "08", "09", "10")
+Data.Description <- as.table(Data.Description)
+Data.Description
+```
+
+# Null Hypothesis [Hø]
+
+  The Total Energy of Bolide at the time of air burst is ƒ(Blast + Shock wave + Thermal radiation + Heat) and ƒ(Radiation phenomenon). In Nuclear device's detonation 10% of total fission energy and 5% of total fusion energy, of a Nuclear device, is released in form of residual Nuclear radiations some time after explosion. Hence, in a pure fission or fusion, the explosion energy is 90% of total fission energy and for fusion its 95%. This implies when Nuclear device’s yield is quoted or used in equations or figures, its that 90% or 95% portion of the total energy. [3]. The Null Hypothesis: 
+
+ **Null Hypothesis [Hø]** : Let’s consider a Bolide at peak brightness is a Nuclear fission device exploding at a high altitude (above the sea level) and the explosion of Bolide at time of air burst behaves in a same manner as a Nuclear device’s explosion. The Total Energy of a Bolide will be quoted as and in Nuclear device’s energy yield equivalents.
+
+  I have used this Null Hypothesis to create new features and to do some analyses.
+
+# Feature Engineering (mechanical and data aspects)
+
+  Feature engineering covers two aspects in this note book. One, from the mechanical aspects of Bolides and Meteoroids, and second from the provided data variables.
+  
+## Conversion of energy from Joules to Kilotons
+
+  Total Radiated Energy in Joules in converted into kilotons to simplify the calculations. The conversion formula:
+  kiloton = 4.185 x 10^12 Joules
+
+```{r}
+Bolide.img$Total.Radiated.Energy.kt. <- round(Bolide.img$Total.Radiated.Energy..J./(4.185*10^12),3)
+```
+
+## Event's Date and Time into Years and Months
+
+  Splitting of Date and Time may help in calculating frequencies of events in a given Year, Month, Day, or Time. I am only taking Year and Month of the event.
+	
+```{r, message=FALSE, warning=FALSE}
+Bolide.img <- separate(Bolide.img, Peak.Brightness.Date.Time..UT., c("Year", "Month"))
+```
+
+## Latitude x Longitude ranges and directions
+
+  Earth's Latitude starts at 0° Equator to 90° towards either side of Earth's poles i.e. North or South. By convention, the **degrees towards North pole** are taken as **positive sign** and **degrees towards South pole** are taken as **negative sign**
+
+  Earth's Longitude starts at 0° Prime Meridian. They go up to 180° from either side of 0° to the other end of Earth i.e. both in East and/or in West of prime meridian. Again by Convention, the **degrees in East of 0°** are taken as **positive sign** and degrees in **West of 0°** are taken as **negative sign** .
+
+  In these features, the Degrees of Longitudes and Latitudes are assigned to their respective 30° range brackets. Then requisite direction signs and names are reassigned to create the range brackets as per convention. Lastly, four directions are coupled to represent Earth’s quadrants in 2-dimensions.
+
+```{r}
+Bolide.img$Lat.NS <- as.factor(ifelse(str_sub(Bolide.img$Latitude..deg.., -1) == "N", "North", ifelse(str_sub(Bolide.img$Latitude..deg.., -1) == "S","South","")))
+Bolide.img$Latitude.Degree <- as.numeric(str_extract(Bolide.img$Latitude..deg.., "\\d+\\.*\\d*"))
+
+Bolide.img$Latitude.Degree <- if_else(Bolide.img$Lat.NS == "South", -abs(Bolide.img$Latitude.Degree), Bolide.img$Latitude.Degree)
+Bolide.img$Latitude.Grid <- cut(Bolide.img$Latitude.Degree, seq(-90, 90, 30))
+
+Bolide.img$Lng.EW <-as.factor(ifelse(str_sub(Bolide.img$Longitude..deg.., -1) == "W", "West", ifelse(str_sub(Bolide.img$Longitude..deg.., -1) == "E","East","")))
+Bolide.img$Longitude.Degree <-as.numeric(str_extract(Bolide.img$Longitude..deg.., "\\d+\\.*\\d*"))
+
+Bolide.img$Longitude.Degree <- if_else(Bolide.img$Lng.EW == "West", -abs(Bolide.img$Longitude.Degree), Bolide.img$Longitude.Degree)
+Bolide.img$Longitude.Grid <- cut(Bolide.img$Longitude.Degree, seq(-180, 180, 30))
+
+Bolide.img$NSEW <- as.factor(paste(Bolide.img$Lat.NS, Bolide.img$Lng.EW))
+```
+
+  Lets have an image of Bolides, as events captured, where Earth is represented in 2—dimensions. Graph 01 is a 30°x30° grid presentation of Bolides in 2x2 direction matrix. In depicts scaled down version of Total Radiated Energy (kt), at peak brightness, into grids.
+  
+ **Please Note** : The graph doesn't contain Bolides where Latitude or Longitude parameters were missing in original data set.
+
+```{r}
+Bolide.img %>% filter(!is.na(Latitude.Grid)) %>% ggplot(aes(y = Latitude.Grid, x = Longitude.Grid))+
+  geom_jitter(aes(size = sqrt(Total.Radiated.Energy.kt.)), color = "red", alpha = 0.36)+
+  geom_text(aes(label=ifelse(sqrt(Total.Radiated.Energy.kt.)>8, "Chelyabinsk, Russia","")), vjust = "outward", size = 3.5)+
+  facet_grid( Lat.NS ~ Lng.EW, scales = "free", switch = "both")+
+  labs(title = "Bolides just above 30°x30° grids of Lat. & Long.", x = "Longitude's Range", y = "Latitude's Range")+
+  theme(legend.position = "top")+
+  scale_size_continuous(name = "Sqrt[Total Radiated Energy (kt)]")
+```
+
+  Each 30°x30° grid shows frequency of Bolide events. Table 02. Following points are some of the frequency based discoveries based data in Frequency Table 02.
+  
+  * 1st Highest frequency grid: **19 Bolide events** are in [30°x60°]x[90°x120°] :: Latitude x Longitude grid. Where on Earth (literally not figuratively) does this grid area is situated?  **!!..MONGOLIA..!!** 45° Latitude passes through Mongolia. Mongolia covers across almost all of 90° to 120° Longitude. 15° North of Mongolia covers some part of **Russia** and 15° South of Mongolia covers almost half of **China** .
+  
+  * 2nd Highest frequency grids: **16 Bolide events** are in [0°x30°]x[-150°x-120°] :: Latitude x Longitude grid. This area is in **North Pacific Ocean**. Grid’s nearest neighbours are **United States and Mexico** situated at top right corner. Other **16 Bolide events** are in [-30°x0°]x[-30°x0°] :: Latitude x Longitude grid. This area is in **South Atlantic Ocean**, just on left of **African continent**.
+
+```{r}
+as.table(xtabs(~ Longitude.Grid + Latitude.Grid, Bolide.img))
+```
+
+## Mechanical aspects of Bolides and Meteoroids
+
+  New features are created as part of thermodynamic and mechanical aspects of Bolides and Meteoroids. 
+
+* Estimated Bolides’ total energy as a Nuclear device equivalent — Null Hypothesis [Hø]
+
+* Air burst’s radius (m)
+
+* Diameter (m) of Meteoroids — both upper and lower limits.
+	
+	GLASSTONE and DOLAN (1977) stated the Altitude (km) of Air Burst act as a gradient scale to determine Nuclear device's blast efficiency factor and thermal radiation percentage. Bolide, using Null Hypothesis [Hø], has been subjected to this gradient scale to create features. 
+
+	The theoretical thickness of Earth’s Atmosphere is at 100 km above sea level. Its called as the Karman Line (source: wikipedia).
+
+ **Please Note** : There are inherent difficulties in making exact measurement of fireballs, airbursts etc in Nuclear explosion.[3]. Certain assumptions had been simplified to derive reasonable estimates of Meteoroids and Bolides.[1]. Hence, these new features will provide probable approximate estimates and contain similar inherent inaccuracies.
+
+### Altitude(km) based energy gradients
+
+  Table 03. Altitude(km) based gradients determine the blast efficiency factor of a Nuclear device, percentages of thermal radiation + shock + blast, the distance invisible rays travels, and the radius of Air burst etc. 10% of total fission energy and 5% of total fusion energy, of a Nuclear device, is released in form of residual Nuclear radiations some time after explosion. This fraction is NOT included when the "energy yield" of a nuclear explosion is stated.[3]. 
+  
+  Bolides are physically impacted due to friction from increasing density of atmosphere as they move towards Earth’s surface. The density of atmosphere is higher near the surface. Bolide explosion’s Radiated Thermal Energy changes based on altitude and climatic conditions of that area, as per Null Hypothesis [Hø]. Earth acts as a reference point for Altitude (km).
+
+  Table 03: Altitude’s gradient scale of Blast Efficiency Factor (Upper Limits) and Percentage range of Thermal Radiations. (source: GLASSTONE and DOLAN, 1977)
+  
+```{r}
+Altitude.Efficiency.Radiation.Table <- matrix(c(1.0, 0.35, 1.0, 0.40, 0.9, 0.40, 0.9, 0.50, 0.7, 0.50, 0.4, 0.50), ncol = 2, byrow = TRUE)
+colnames(Altitude.Efficiency.Radiation.Table) <- c("Blast Efficiency Factor","Thermal Radiation percent")
+rownames(Altitude.Efficiency.Radiation.Table) <- c("Altitude(km) <= 12.192", "12.192 < Alt(km) <= 27.432", "27.432 < Alt(km) <= 30.480", "30.480 < Alt(km) <= 36.576", "36.576 < Alt(km) <= 45.720", "Altitude(km) > 45.720")
+Altitude.Efficiency.Radiation.Table <- as.table(Altitude.Efficiency.Radiation.Table)
+Altitude.Efficiency.Radiation.Table
+```
+
+### Bolide as Nuclear explosive device equivalent (kt)
+
+  The percentage of Radiated Thermal Energy as ƒ(Light Energy + Heat Energy - Invisible rays) varies with altitude at which Air - Burst has taken place. [3]. The Total Radiated Energy (thermal), at peak brightness or Air - Burst, is provided in the data.
+  
+  In Total Energy equation the complement of thermal radiations are Blast + Shock.[3]. We calculate the Total Energy of Bolide at peak brightness **Thermal Radiation + Blast + Shock** and state it as a new feature as per **Null Hypothesis [Hø]** derived from Table 03.
+
+```{r}
+Bolide.img <- 
+  mutate(Bolide.img, Bol.as.erg.kt = round(
+    if_else(Altitude..km. <= 12.192, (Total.Radiated.Energy.kt./(0.35*1)),
+    if_else(Altitude..km. > 12.192 & Altitude..km. <= 27.432, (Total.Radiated.Energy.kt./(0.40*1)),
+    if_else(Altitude..km. > 27.432 & Altitude..km. <= 30.48, (Total.Radiated.Energy.kt./(0.4*0.9)),
+    if_else(Altitude..km. > 30.48 & Altitude..km. <= 36.576, (Total.Radiated.Energy.kt./(0.5*0.9)),
+    if_else(Altitude..km. > 36.576 & Altitude..km. <= 45.72, (Total.Radiated.Energy.kt./(0.5*0.7)), (Total.Radiated.Energy.kt./(0.5*0.4))))))), 2))
+```
+
+### Radius (m) of Air-Burst, at peak brightness
+
+  Air-Burst of Bolides release thermal radiations like an umbrella. Here using Table 03 and the methodology given by GLASSTONE and DOLAN (1977) the Radius (m) of thermal radiation's umbrella is calculated.
+  
+```{r}
+Bolide.img <- 
+  mutate(Bolide.img, Air.Burst.Rad.m = round(
+      if_else(Altitude..km. <= 12.192 , (110*0.3048)*((Total.Radiated.Energy.kt./(0.35*1))^(0.4)),
+      if_else(Altitude..km. > 12.192 & Altitude..km. <= 27.432, (110*0.3048)*((Total.Radiated.Energy.kt./(0.40*1))^(0.4)),
+      if_else(Altitude..km. > 27.432 & Altitude..km. <= 30.48, (110*0.3048)*((Total.Radiated.Energy.kt./(0.4*0.9))^(0.4)),
+      if_else(Altitude..km. > 30.48 & Altitude..km. <= 36.576, (110*0.3048)*((Total.Radiated.Energy.kt./(0.5*0.9))^(0.4)),
+      if_else(Altitude..km. > 36.576 & Altitude..km. <= 45.72,(110*0.3048)*((Total.Radiated.Energy.kt./(0.5*0.7))^(0.4)), (110*0.3048)*((Total.Radiated.Energy.kt./(0.5*0.4))^(0.4))))))), 2))
+```
+
+### Diameter (m) of Meteoroids: Lower and Upper limits
+
+  Gareth S. COLLINS et al. stated: “…Numerical simulations of vapour plume expansion (Melosh et al. 1993; Nemtchinov et al. 1998) predict that the fireball radius at the time of maximum radiation is 10—15 times the Meteoroid’s diameter”.
+
+  This simulated range forms part of my another set of new features. The upper and lower limits of Diameter (m) of Meteoroids are calculated using Altitude (km) gradient table, calculated Air Burst radius (m), and above statement of Gareth S. COLLINS et al.
+
+  In this notebook, the **calculated Chelyabinsk, Russia Meteoroid’s diameter (m)** is in range of **[19.47 m, 29.21 m] :: [Lower Limit, Upper Limit]**. I think I am lucky here in this calculation and what about Null Hypothesis [Hø]? Let's see.
+
+  Reference: [Chelyabinsk meteor, Russia](https://en.wikipedia.org/wiki/Chelyabinsk_meteor), was a super bolide caused by an **approximate diameter of 20 meters** Near—Earth asteroid on 15 February 2013 (source: wikipedia).
+
+```{r}
+Bolide.img <- mutate(Bolide.img, Impactor.Nuc.dia.Hi = round(Air.Burst.Rad.m/10,2))
+Bolide.img <- mutate(Bolide.img, Impactor.Nuc.dia.Lo = round(Air.Burst.Rad.m/15,2))
+```
+
+### Energy Ratios: Bolide (kt) based on Null Hypothesis [Hø] to Meteoroid (kt)
+
+  The ratio of Bolide’s total calculated energy (kt) based on Null Hypothesis [Hø] to Meteoroid’s calculated total impact energy (kt) from data is one of the features.
+
+```{r}
+Bolide.img <- mutate(Bolide.img, Erg.to.Impact = round(Bol.as.erg.kt/Calculated.Total.Impact.Energy..kt., 2))
+```
+
+  Graph 02 demonstrates calculated average diameters (m) of Meteoroids, before it enters Earth atmosphere, on Altitude (km) vs Total Radiated Energy (kt) on Log10 scale. The trend—line with slight negative slope implies the Total Radiated Energy (kt) decreases as the Altitude (km) increases, above geoid at peak brightness.
+
+  Altitude (km) and Total Radiated Energy (kt) have high standard deviations and range. Altitude (km) has sigma of 7.92 and range of 15.3 km to 59.3 km, mean and median both are in close proximity i.e. 33.58 km and 33.30 km. Total Radiated Energy (kt) has sigma of 7.21 with range of 0.005 kt to 89.6 kt, mean and median at 0.2 kt and 0.028 kt.
+
+```{r, warning=FALSE}
+Bolide.img %>% filter(!is.na(Altitude..km.))%>% ggplot(aes(x = Altitude..km., y = Total.Radiated.Energy.kt.))+
+  geom_jitter(aes(size = (Impactor.Nuc.dia.Lo+Impactor.Nuc.dia.Hi)/2),color = "orange",alpha = 0.90)+
+  geom_smooth(model = lm, color = "red")+
+  geom_text(aes(label=ifelse(Total.Radiated.Energy.kt.>80, "Chelyabinsk, Russia","")), vjust = "inward", size = 3.5)+
+  labs(title = "Bolide's Total Radiated Energy(kt) vs Altitude(km)", x = "Altitude (km), above geoid", y = "Log of Total Radiated Energy(kt)")+
+  theme_light()+theme(legend.position = "top")+
+  scale_size_continuous(name = "Meteoroids' average Diameter (m)")+
+  scale_y_log10()
+```
+
+  Graph 03 shows ratios of Bolide as an energy source (kt) as per Null Hypothesis [Hø] and Meteoroids as an energy source (kt), on Altitude (km) vs Energy Ratios axes. As per calculations +98.7% of Bolides with calculated new features and complete cases data have their energy ratio less than 50%. As the graph shows, closer the Bolide bursts or achieves peak brightness to Earth’s surface lesser is the ratio - except in one sub - section where at Altitudes beyond +60 km the ratio again starts decreasing. The Eathr's atmosphere is quite thin at those altitudes. Lots of Meteoroid’s mass get dissipated into atmosphere as different forms of energy, as it moves from **Karman Line at 100 km or theoretical ZERO atmosphere** towards earth’s surface.
+
+```{r, warning=FALSE}
+Bolide.img %>% filter(!is.na(Erg.to.Impact)) %>% ggplot(aes(x = Altitude..km., y = Erg.to.Impact))+
+  geom_jitter(color = "navyblue",alpha = 0.72)+
+  geom_smooth(model = lm)+
+  facet_wrap(~ NSEW, scales = "free")+
+  labs(title = "Energy Ratios | Bolide [as per Null Hypothesis [Hø]] : Meteoroid [erg]", x = "Altitude (km) at Peak Brightness", y = "Energy Ratio")
+```
+
+# Analytics
+
+  Data analytics covers clustering and discovery of relationship between different measured variables in original data, where Earth is the reference point.
+
+## Clustering
+
+  Clustering is done only with independently measured variables provided in the original data set. k—means clustering has been used twice. Newly created features/variables in cluster creation exercise are kept out so as to stay as close as possible to disparate original variables.
+
+### k-means Clustering, Energy variables
+
+  In first k—means clustering exercise the normalisation of Total Radiated Energy (J) and Calculated Total Impact Energy (kt) is done and 5 sets of clusters are created. This exercise includes all the 719 observations from original data set. Each cluster is named as per their respective **median** of Calculated Total Impact Energy (kt).
+	
+```{r}
+set.seed(333)
+preProc.erg <- preProcess(Bolide.img[10:11])
+B.mod.erg.norm <- predict(preProc.erg, Bolide.img)
+B.erg.KMC <- kmeans(B.mod.erg.norm[10:11], centers = 5, iter.max = 1000)
+
+B.erg1 <- subset(Bolide.img, B.erg.KMC$cluster == 1)
+B.erg2 <- subset(Bolide.img, B.erg.KMC$cluster == 2)
+B.erg3 <- subset(Bolide.img, B.erg.KMC$cluster == 3)
+B.erg4 <- subset(Bolide.img, B.erg.KMC$cluster == 4)
+B.erg5 <- subset(Bolide.img, B.erg.KMC$cluster == 5)
+
+summary(B.erg1$Calculated.Total.Impact.Energy..kt.)
+B.erg1 <- B.erg1 %>% rowwise() %>% mutate(Energy.Grp = "T.Impact.Erg(kt): Med= 33.0")
+summary(B.erg2$Calculated.Total.Impact.Energy..kt.)
+B.erg2 <- B.erg2 %>% rowwise() %>% mutate(Energy.Grp = "T.Impact.Erg(kt): Med= 13.0")
+summary(B.erg3$Calculated.Total.Impact.Energy..kt.)
+B.erg3 <- B.erg3 %>% rowwise() %>% mutate(Energy.Grp = "T.Impact.Erg(kt): Med= 3.3")
+summary(B.erg4$Calculated.Total.Impact.Energy..kt.)
+B.erg4 <- B.erg4 %>% rowwise() %>% mutate(Energy.Grp = "T.Impact.Erg(kt): Med= 440.0")
+summary(B.erg5$Calculated.Total.Impact.Energy..kt.)
+B.erg5 <- B.erg5 %>% rowwise() %>% mutate(Energy.Grp = "T.Impact.Erg(kt): Med= 0.2")
+
+Bolide.erg.grp <- bind_rows(B.erg1, B.erg2, B.erg3, B.erg4, B.erg5)
+Bolide.erg.grp$Energy.Grp <- as.factor(Bolide.erg.grp$Energy.Grp)
+```
+  
+  Data with 1st set of 5 clusters can be seen here.
+
+```{r}
+summary(Bolide.erg.grp$Energy.Grp)
+```
+
+### k-means Clustering, Earth reference variables
+
+  In second k—means clustering exercise, normalisation of Altitude (km) and Velocity (km/s) is done and again 5 sets of clusters are created. This exercise includes only complete cases i.e. 155 observations of the original data set. The cluster names from both exercises are realigned with each observation of event in complete case data set.
+
+```{r}
+Bolide.CC <- Bolide.erg.grp %>% filter(!is.na(Altitude..km.) & !is.na(Velocity..km.s.))
+
+set.seed(999)
+preProc.AV <- preProcess(Bolide.CC[5:6])
+B.mod.AV.norm <- predict(preProc.AV, Bolide.CC)
+B.AV.KMC <- kmeans(B.mod.AV.norm[5:6], centers = 5, iter.max = 1000)
+
+B.AV1 <- subset(Bolide.CC, B.AV.KMC$cluster == 1)
+B.AV2 <- subset(Bolide.CC, B.AV.KMC$cluster == 2)
+B.AV3 <- subset(Bolide.CC, B.AV.KMC$cluster == 3)
+B.AV4 <- subset(Bolide.CC, B.AV.KMC$cluster == 4)
+B.AV5 <- subset(Bolide.CC, B.AV.KMC$cluster == 5)
+
+B.AV1 <- B.AV1 %>% rowwise() %>% mutate(Cluster.AV = "Cluster.Alt.Vel 1")
+B.AV2 <- B.AV2 %>% rowwise() %>% mutate(Cluster.AV = "Cluster.Alt.Vel 2")
+B.AV3 <- B.AV3 %>% rowwise() %>% mutate(Cluster.AV = "Cluster.Alt.Vel 3")
+B.AV4 <- B.AV4 %>% rowwise() %>% mutate(Cluster.AV = "Cluster.Alt.Vel 4")
+B.AV5 <- B.AV5 %>% rowwise() %>% mutate(Cluster.AV = "Cluster.Alt.Vel 5")
+Bolide.C.Case <- bind_rows(B.AV1, B.AV2, B.AV3, B.AV4, B.AV5)
+Bolide.C.Case$Cluster.AV <- as.factor(Bolide.C.Case$Cluster.AV)
+```
+
+  Complete Case data set with two sets of clusters can be see here.
+
+```{r}
+summary(Bolide.C.Case$Energy.Grp)
+summary(Bolide.C.Case$Cluster.AV)
+```
+
+  Graph 04 show Bolides' calculated total energy (kt) on Log10 scale as per Null Hypothesis [Hø] at various Altitudes (km) above geoid vs Velocity (km/s). As part of complete case data set, they are represented in 5x5 clusters of Altitude — Velocity x Total Impact Energy Medians.
+
+```{r}
+Bolide.C.Case %>% ggplot(aes(y = Altitude..km., x = Velocity..km.s.))+
+  geom_jitter(aes(size = log(Bol.as.erg.kt)), col = "maroon", alpha = 0.81)+
+  facet_grid(Cluster.AV~ Energy.Grp, scales = "free")+
+  geom_text(aes(label=ifelse(Total.Radiated.Energy.kt.>80, "Chelyabinsk, Russia","")), hjust = "inward", size = 3)+
+  labs(title = "Bolides' 5x5 clusters - as per Null Hypothesis [Hø]", x = "Velocity (km/s)", y = " Altitude (km), above geoid")+
+  theme_light()+theme(legend.position = "top")+
+    scale_size_continuous(name = "Log[Bolides' calculated total energy (kt) as per Null Hypothesis [Hø]]")
+```
+
+  Graph 05 express Bolides’ Air Bursts’ radius (m) at various Altitudes (km) above geoid vs pre-impact Velocities (km/s) at peak brightness. As part of complete case data set, they are spread over into 5x4 clusters of Altitude — Velocity x Directions of Earth’s observations in four quadrants.
+
+```{r}
+Bolide.C.Case %>% ggplot(aes(y= Velocity..km.s., x= Altitude..km.))+
+  geom_point(aes(size = log(Air.Burst.Rad.m)), color = "blue", alpha = 0.45)+
+  facet_grid(Cluster.AV~NSEW)+
+  labs(title ="Bolides' radius in 5x4 Clusters", x = "Velocity (km/s) at Airburst", y = "Altitude (km) at Airburst")+theme(legend.position = "top")+scale_size_continuous(name = "Log of Bolide's Airburst's radius (m)")
+```
+
+## Data without feature engineering
+
+  So far in this data analysis a big quantum of data is left out of mechanical part of feature engineering. It’s mainly because of missing values of various variables, at least for Altitude (km) or Velocity (km/s) or both. This left out data has 564 observations. Graph 06 shows Frequency of Bolides which could not be part of Altitude (km) based featured engineering. It is shown as per directions of Earth in two dimenasions.
+  	
+```{r}
+Bolide.img %>% filter(is.na(Altitude..km.)) %>% ggplot(aes(x = Calculated.Total.Impact.Energy..kt., colour = NSEW))+
+  geom_histogram(bins = 100)+
+  facet_wrap(~ NSEW, scales = "free")+
+  scale_x_log10()+
+  labs(title = "Frequency of Bolides with missing data", y = "Frequency", x = "x - axis on Log10 scale")
+```
+
+## Polynomial relations in-between variables
+
+  Polynomial regression has been used to determine the relationship between various features either given or created in the complete case data set. Its used to determine non—linear curves. Besides, Chelyabinsk (Russia) bolide event has been kept out as it is an outlier. Few cases of polynomial simulations are presented to give the flavour.
+
+### Altitude (km) and it's relation with variables
+
+* Polynomial relation of Altitude (km) with Velocity (km/s)
+
+```{r}
+which.max(Bolide.C.Case$Calculated.Total.Impact.Energy..kt.)
+Bolide.C.Case2 <- Bolide.C.Case[-9,]
+
+AV <- lm(Altitude..km. ~ poly(Velocity..km.s.,6), data = Bolide.C.Case2)
+summary(AV)
+Vel <- range(Bolide.C.Case2$Velocity..km.s.)
+Vel.grid <- seq(from = Vel[1], to = Vel[2])
+pred.AV <- predict(AV, newdata = list(Velocity..km.s. = Vel.grid), se = TRUE)
+Vel.se.bands <- cbind(pred.AV$fit + 2*pred.AV$se.fit, pred.AV$fit - 2*pred.AV$se.fit)
+```
+
+  Graph 07 shows: Polynomial relation of degree-4 with p-value of 2.23%. Altitude (km) as ƒ(Velocity of Fireballs), at peak brightness. Besides it shows twice the error calculated with 95% confidence interval.
+
+```{r}
+plot(Bolide.C.Case2$Velocity..km.s., Bolide.C.Case2$Altitude..km., xlim = Vel, cex = 0.5, col = "darkgrey", xlab = "V = Velocity of Fireball (km/s)", ylab = "Altitude (km) = ƒ(V)", main = "Altitude as ƒ(Velocity of Fireball), at peak brightness", sub = "Polynomial relation of degree-4, p-value = 2.23%")
+lines(Vel.grid, pred.AV$fit, lwd = 2, col = "darkgreen")
+matlines(Vel.grid, Vel.se.bands, lwd = 1, col = "darkgreen", lty = 3)
+```
+
+* Polynomial relation of Altitude (km) with Meteoroid's Diameter (m) - Lower Limits
+
+```{r}
+AIdia <- lm(Altitude..km.~ poly(Impactor.Nuc.dia.Lo, 6), data = Bolide.C.Case2)
+summary(AIdia)
+Idia <- range(Bolide.C.Case2$Impactor.Nuc.dia.Lo)
+Idia.grid <- seq(from = Idia[1], to = Idia[2])
+pred.AIdia <- predict(AIdia, newdata = list(Impactor.Nuc.dia.Lo = Idia.grid), se = TRUE)
+Idia.se.bands <- cbind(pred.AIdia$fit + 2*pred.AIdia$se.fit, pred.AIdia$fit - 2*pred.AIdia$se.fit)
+```
+
+  Graph 08 shows: Polynomial relation of degree-6 with p-value of 9.37%. Altitude (km) as ƒ(Meteoroid's Diameter ~ Lower Limits). Besides it shows twice the error calculated with 95% confidence interval.
+
+```{r}
+plot(Bolide.C.Case2$Impactor.Nuc.dia.Lo, Bolide.C.Case2$Altitude..km., xlim = Idia, cex = 0.5, col = "darkgrey", xlab = "D = Meteoroid's Diameter (m) ~ lower limits", ylab = "Altitude (km) = ƒ(D)", main = "Altitude as ƒ(Meteoroid's Diameter ~ lower limits)", sub = "Polynomial relation of degree-6, p-value = 9.37%")
+lines(Idia.grid, pred.AIdia$fit, lwd = 2, col = "maroon")
+matlines(Idia.grid, Idia.se.bands, lwd = 1, col = "maroon", lty = 3)
+```
+
+### Velocity (km/s) and it's relation with variables 
+
+* Polynomial relation of Velocity (km/s) with Meteoroid's Diameter (m) - Lower Limits
+
+```{r}
+Vdia <- lm(Velocity..km.s.~poly(Impactor.Nuc.dia.Lo, 6), data = Bolide.C.Case2)
+summary(Vdia)
+VIdia <- range(Bolide.C.Case2$Impactor.Nuc.dia.Lo)
+VI.grid <- seq(from = VIdia[1], to = VIdia[2])
+pred.Vdia <- predict(Vdia, newdata = list(Impactor.Nuc.dia.Lo = VI.grid), se = TRUE)
+VI.se.bands <- cbind(pred.Vdia$fit + 2*pred.Vdia$se.fit, pred.Vdia$fit - 2*pred.Vdia$se.fit)
+```
+
+  Graph 09 shows: Polynomial relation of degree-4 with p-value of 3.6%. Velocity (km/s) as ƒ(Meteoroid's Diameter ~ Lower Limits). Besides it shows twice the error calculated with 95% confidence interval.
+
+```{r}
+plot(Bolide.C.Case2$Impactor.Nuc.dia.Lo, Bolide.C.Case2$Velocity..km.s., xlim = VIdia, cex = 0.5, col = "darkgrey", xlab = "D = Meteoroid's Diameter (m) ~ lower limits", ylab = "Velocity (km/s) = ƒ(D)", main = "Velocity as ƒ(Meteoroid's Diameter (m) ~ lower limits)", sub = "Polynomial relation of degree-4, p-value = 3.6%")
+lines(VI.grid, pred.Vdia$fit, lwd = 2, col = "blue")
+matlines(VI.grid, VI.se.bands, lwd = 1, col = "blue", lty = 3)
+```
+
+# Conclusion
+
+  The Null Hypothesis [Hø] based calculations were made in feature engineering. The observations are as follows:
+
+* The Diameter of Meteoroids - both Upper Limit and Lower Limit - gives a range with 90% Nuclear energy yeild factor quotation convention. The **calculated** lower limit of **Diameter Chelyabinsk meteor (Russia) at 19.47 m** is in close proximity of the **quoted Daimater of Chelyabinsk meteor (Russia)** in wikipedia i.e. **aprroximately 20 m**. 
+
+* Energy Ratios between Bolides (at Air-Burst) and Meteoroids does not, so far, deviate from general pattern of Air-Burst of Nuclear devices explosion at high altitude. Except calculated Energy Ratios has an error of 1.3% in complete case data set, IF 50% Energy Ratio of Bolide (at Air Burst) to Meteoroid is considered as the upper limit.
+
+  Hence, based on the observations above, limits of original data (i.e. missing information), and material referenced by me so far: we may say we **Fail to Reject the Null Hypothesis [Hø]**. 
+  
+  On the other hand if some new information could be added - that I missed or could not be able to take into consideration in calculations - then based on redrawn analyses this conclusion has to be revised.
+
+  My gratitude to you all for giving your time to read this notebook. Please do share your feedbacks, views, critiques, and if liked it your upvotes.
+
+ **NOTA BENE** : If you find any error in this notebook please do write in comments section. I'll try to rectify it.
+
+# References
+
+1. COLLINS G. S. (from Imperial College London, UK), and MELOSH H. J. & MARCUS R. A. (from University of Arizona, US). 2005 Earth Impact Effects Program: A Web — Based computer program for calculating the regional environmental consequences of a meteoroid impact on Earth.
+
+2. Fireballs and Bolides by NASA’s Jet Propulsion Laboratory
+
+3. GLASSTONE S., DOLAN P. J. 1977 The Effects of Nuclear Weapons 3rd Edition Washington DC by United States Department of Defence and the Energy Research and Development Administration Chapter 1, Chapter 2, Chapter 3
+
+4. My gratitude to [Megan Risdal](https://www.kaggle.com/mrisdal) and [Head or Tails](https://www.kaggle.com/headsortails) whose notebooks helped me fine tune my work.
